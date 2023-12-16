@@ -8,8 +8,10 @@
 #include <vector>
 #include <unordered_map>
 #include <cctype>
+#include "NFSU_JPSupport.hpp"
 
 bool bForceJPMovies = false;
+uintptr_t ptrLoadGlobalAChunks = 0;
 
 enum eLanguages
 {
@@ -50,7 +52,18 @@ enum eBuildRegion
 };
 
 const char* pathLangJpn = "LANGUAGES\\JAPANESE.BIN";
-const char* pathLangJpnPS2 = "LANGUAGES\\JAPANESE_PS2.BIN";
+
+const char* pathLangEngJTune = "LANGUAGES\\JTUNE\\ENGLISH.BIN";
+const char* pathLangFreJTune = "LANGUAGES\\JTUNE\\FRENCH.BIN";
+const char* pathLangGerJTune = "LANGUAGES\\JTUNE\\GERMAN.BIN";
+const char* pathLangItaJTune = "LANGUAGES\\JTUNE\\ITALIAN.BIN";
+const char* pathLangSpaJTune = "LANGUAGES\\JTUNE\\SPANISH.BIN";
+const char* pathLangDutJTune = "LANGUAGES\\JTUNE\\DUTCH.BIN";
+const char* pathLangSweJTune = "LANGUAGES\\JTUNE\\SWEDISH.BIN";
+const char* pathLangKorJTune = "LANGUAGES\\JTUNE\\KOREAN.BIN";
+const char* pathLangChiJTune = "LANGUAGES\\JTUNE\\CHINESE.BIN";
+const char* pathLangJpnJTune = "LANGUAGES\\JTUNE\\JAPANESE.BIN";
+const char* pathLangTexJTune = "LANGUAGES\\JTUNE\\LANGUAGETEXTURES.BIN";
 
 uint32_t hashLangJpn[28] =
 {
@@ -174,18 +187,34 @@ __declspec(naked) void hkHondaLogoHook3()
     }
 }
 
-
 void Init()
 {
-	CIniReader inireader("");
-	
+    CIniReader inireader("");
+
     *(eLanguages*)0x70430C = (eLanguages)inireader.ReadInteger("MAIN", "OverrideLang", eLANGUAGE_JAPANESE);
     *(eBuildRegion*)0x734998 = (eBuildRegion)inireader.ReadInteger("MAIN", "OverrideBuildRegion", BUILD_REGION_JAPAN);
     bForceJPMovies = inireader.ReadInteger("MAIN", "ForceJPMovies", 1) != 0;
 
-    bool bUsePS2Strings = inireader.ReadInteger("MAIN", "UsePS2Strings", 1) != 0;
-    if (bUsePS2Strings)
-	    injector::WriteMemory<const char*>(0x6EE6E8, pathLangJpnPS2, true);
+    bool bUseJTuneLang = inireader.ReadInteger("MAIN", "UseJTuneLang", 1) != 0;
+    if (bUseJTuneLang)
+    {
+        injector::WriteMemory<const char*>(0x6EE658, pathLangEngJTune, true);
+        injector::WriteMemory<const char*>(0x6EE668, pathLangFreJTune, true);
+        injector::WriteMemory<const char*>(0x6EE678, pathLangGerJTune, true);
+        injector::WriteMemory<const char*>(0x6EE688, pathLangItaJTune, true);
+        injector::WriteMemory<const char*>(0x6EE698, pathLangSpaJTune, true);
+        injector::WriteMemory<const char*>(0x6EE6A8, pathLangDutJTune, true);
+        injector::WriteMemory<const char*>(0x6EE6B8, pathLangSweJTune, true);
+        injector::WriteMemory<const char*>(0x6EE6C8, pathLangKorJTune, true);
+        injector::WriteMemory<const char*>(0x6EE6D8, pathLangChiJTune, true);
+        injector::WriteMemory<const char*>(0x6EE6E8, pathLangJpnJTune, true);
+
+        injector::WriteMemory<const char*>(0x59F781 + 1, pathLangTexJTune, true);
+        injector::WriteMemory<const char*>(0x59F790 + 1, pathLangTexJTune, true);
+        injector::WriteMemory<const char*>(0x59F7AB + 1, pathLangTexJTune, true);
+        injector::WriteMemory<const char*>(0x59F9EF + 1, pathLangTexJTune, true);
+        injector::WriteMemory<const char*>(0x59FA07 + 1, pathLangTexJTune, true);
+    }
     else
         injector::WriteMemory<const char*>(0x6EE6E8, pathLangJpn, true);
 
