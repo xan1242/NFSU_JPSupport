@@ -28,7 +28,78 @@
 #include <windows.h>
 #include <cstdint>
 #include <cstdio>
-#include "gvm/gvm.hpp"
+
+class address_manager
+{
+private:
+    address_manager()
+    {
+        
+    }
+
+    // You could implement your translator for the address your plugin uses
+    // If not implemented, the translator won't translate anything, just return the samething as before
+#ifdef INJECTOR_GVM_HAS_TRANSLATOR
+    void* translator(void* p);
+#else
+    void* translator(void* p) { return p; }
+#endif
+
+public:
+    // Translates address p to the running executable pointer
+    void* translate(void* p)
+    {
+        return translator(p);
+    }
+
+
+public:
+    // Address manager singleton
+    static address_manager& singleton()
+    {
+        static address_manager m;
+        return m;
+    }
+
+    // Static version of translate()
+    static void* translate_address(void* p)
+    {
+        return singleton().translate(p);
+    }
+
+public:
+    // Functors for memory translation:
+
+    // Translates aslr translator
+    struct fn_mem_translator_aslr
+    {
+        void* operator()(void* p) const
+        {
+            static uintptr_t  module = (uintptr_t)GetModuleHandle(NULL);
+            return (void*)((uintptr_t)(p)-(0x400000 - module));
+        }
+    };
+
+    // Translates nothing translator
+    struct fn_mem_translator_nop
+    {
+        void* operator()(void* p) const
+        {
+            return p;
+        }
+    };
+
+    // Real translator
+    struct fn_mem_translator
+    {
+        void* operator()(void* p) const
+        {
+            return translate_address(p);
+        }
+    };
+};
+
+//#include "gvm/gvm.hpp"
 /*
     The following macros (#define) are relevant on this header:
 
@@ -54,7 +125,7 @@
         If defined, the game_version_manager should be implemented by the user before including this library.
         By default it provides a nice gvm for Grand Theft Auto series
 */
-#include "gvm/gvm.hpp"
+//#include "gvm/gvm.hpp"
 
 
 
@@ -660,95 +731,95 @@ inline memory_pointer_aslr  aslr_ptr(T p)
 #ifndef INJECTOR_GVM_OWN_DETECT // Should we implement our detection method?
 
 // Detects game, region and version; returns false if could not detect it
-inline bool game_version_manager::Detect()
-{
-    // Cleanup data
-    this->Clear();
-
-    // Find NT header
-    uintptr_t          base     = (uintptr_t) GetModuleHandleA(NULL);
-    IMAGE_DOS_HEADER*  dos      = (IMAGE_DOS_HEADER*)(base);
-    IMAGE_NT_HEADERS*  nt       = (IMAGE_NT_HEADERS*)(base + dos->e_lfanew);
-            
-    // Look for game and version thought the entry-point
-    // Thanks to Silent for many of the entry point offsets
-    switch (base + nt->OptionalHeader.AddressOfEntryPoint + (0x400000 - base))
-    {
-        case 0x5C1E70:  // GTA III 1.0
-            game = '3', major = 1, minor = 0, region = 0, steam = false;
-            return true;
-            
-        case 0x5C2130:  // GTA III 1.1
-            game = '3', major = 1, minor = 1, region = 0, steam = false;
-            return true;
-            
-        case 0x5C6FD0:  // GTA III 1.1 (Cracked Steam Version)
-        case 0x9912ED:  // GTA III 1.1 (Encrypted Steam Version)
-            game = '3', major = 1, minor = 1, region = 0, steam = true;
-            return true;
-    
-        case 0x667BF0:  // GTA VC 1.0
-            game = 'V', major = 1, minor = 0, region = 0, steam = false;
-            return true;
-            
-        case 0x667C40:  // GTA VC 1.1
-            game = 'V', major = 1, minor = 1, region = 0, steam = false;
-            return true;
-
-        case 0x666BA0:  // GTA VC 1.1 (Cracked Steam Version)
-        case 0xA402ED:  // GTA VC 1.1 (Encrypted Steam Version)
-            game = 'V', major = 1, minor = 1, region = 0, steam = true;
-            return true;
-    
-        case 0x82457C:  // GTA SA 1.0 US Cracked
-        case 0x824570:  // GTA SA 1.0 US Compact
-            game = 'S', major = 1, minor = 0, region = 'U', steam = false;
-            cracker = injector::ReadMemory<uint8_t>(raw_ptr(0x406A20), true) == 0xE9? 'H' : 0;
-            return true;
-
-        case 0x8245BC:  // GTA SA 1.0 EU Cracked (??????)
-        case 0x8245B0:  // GTA SA 1.0 EU Cracked
-            game = 'S', major = 1, minor = 0, region = 'E', steam = false;
-            cracker = injector::ReadMemory<uint8_t>(raw_ptr(0x406A20), true) == 0xE9? 'H' : 0;  // just to say 'securom'
-            return true;
-            
-        case 0x8252FC:  // GTA SA 1.1 US Cracked
-            game = 'S', major = 1, minor = 1, region = 'U', steam = false;
-            return true;
-            
-        case 0x82533C:  // GTA SA 1.1 EU Cracked
-            game = 'S', major = 1, minor = 1, region = 'E', steam = false;
-            return true;
-            
-        case 0x85EC4A:  // GTA SA 3.0 (Cracked Steam Version)
-        case 0xD3C3DB:  // GTA SA 3.0 (Encrypted Steam Version)
-            game = 'S', major = 3, minor = 0, region = 0, steam = true;
-            return true;
-
-        case 0xC965AD:  // GTA IV 1.0.0.4 US
-            game = 'I', major = 1, minor = 0, majorRevision = 0, minorRevision = 4, region = 'U', steam = false;
-            return true;
-
-        case 0xD0D011:  // GTA IV 1.0.0.7 US
-            game = 'I', major = 1, minor = 0, majorRevision = 0, minorRevision = 7, region = 'U', steam = false;
-            return true;
-
-        case 0xCF529E:  // GTA IV 1.0.0.8 US
-            game = 'I', major = 1, minor = 0, majorRevision = 0, minorRevision = 8, region = 'U', steam = false;
-            return true;
-
-        case 0xD0AF06:  // GTA EFLC 1.1.2.0 US
-            game = 'E', major = 1, minor = 1, majorRevision = 2, minorRevision = 0, region = 'U', steam = false;
-            return true;
-
-        case 0xCF4BAD:  // GTA EFLC 1.1.3.0 US
-            game = 'E', major = 1, minor = 1, majorRevision = 3, minorRevision = 0, region = 'U', steam = false;
-            return true;
-
-        default:
-            return false;
-    }
-}
+//inline bool game_version_manager::Detect()
+//{
+//    // Cleanup data
+//    this->Clear();
+//
+//    // Find NT header
+//    uintptr_t          base     = (uintptr_t) GetModuleHandleA(NULL);
+//    IMAGE_DOS_HEADER*  dos      = (IMAGE_DOS_HEADER*)(base);
+//    IMAGE_NT_HEADERS*  nt       = (IMAGE_NT_HEADERS*)(base + dos->e_lfanew);
+//            
+//    // Look for game and version thought the entry-point
+//    // Thanks to Silent for many of the entry point offsets
+//    switch (base + nt->OptionalHeader.AddressOfEntryPoint + (0x400000 - base))
+//    {
+//        case 0x5C1E70:  // GTA III 1.0
+//            game = '3', major = 1, minor = 0, region = 0, steam = false;
+//            return true;
+//            
+//        case 0x5C2130:  // GTA III 1.1
+//            game = '3', major = 1, minor = 1, region = 0, steam = false;
+//            return true;
+//            
+//        case 0x5C6FD0:  // GTA III 1.1 (Cracked Steam Version)
+//        case 0x9912ED:  // GTA III 1.1 (Encrypted Steam Version)
+//            game = '3', major = 1, minor = 1, region = 0, steam = true;
+//            return true;
+//    
+//        case 0x667BF0:  // GTA VC 1.0
+//            game = 'V', major = 1, minor = 0, region = 0, steam = false;
+//            return true;
+//            
+//        case 0x667C40:  // GTA VC 1.1
+//            game = 'V', major = 1, minor = 1, region = 0, steam = false;
+//            return true;
+//
+//        case 0x666BA0:  // GTA VC 1.1 (Cracked Steam Version)
+//        case 0xA402ED:  // GTA VC 1.1 (Encrypted Steam Version)
+//            game = 'V', major = 1, minor = 1, region = 0, steam = true;
+//            return true;
+//    
+//        case 0x82457C:  // GTA SA 1.0 US Cracked
+//        case 0x824570:  // GTA SA 1.0 US Compact
+//            game = 'S', major = 1, minor = 0, region = 'U', steam = false;
+//            cracker = injector::ReadMemory<uint8_t>(raw_ptr(0x406A20), true) == 0xE9? 'H' : 0;
+//            return true;
+//
+//        case 0x8245BC:  // GTA SA 1.0 EU Cracked (??????)
+//        case 0x8245B0:  // GTA SA 1.0 EU Cracked
+//            game = 'S', major = 1, minor = 0, region = 'E', steam = false;
+//            cracker = injector::ReadMemory<uint8_t>(raw_ptr(0x406A20), true) == 0xE9? 'H' : 0;  // just to say 'securom'
+//            return true;
+//            
+//        case 0x8252FC:  // GTA SA 1.1 US Cracked
+//            game = 'S', major = 1, minor = 1, region = 'U', steam = false;
+//            return true;
+//            
+//        case 0x82533C:  // GTA SA 1.1 EU Cracked
+//            game = 'S', major = 1, minor = 1, region = 'E', steam = false;
+//            return true;
+//            
+//        case 0x85EC4A:  // GTA SA 3.0 (Cracked Steam Version)
+//        case 0xD3C3DB:  // GTA SA 3.0 (Encrypted Steam Version)
+//            game = 'S', major = 3, minor = 0, region = 0, steam = true;
+//            return true;
+//
+//        case 0xC965AD:  // GTA IV 1.0.0.4 US
+//            game = 'I', major = 1, minor = 0, majorRevision = 0, minorRevision = 4, region = 'U', steam = false;
+//            return true;
+//
+//        case 0xD0D011:  // GTA IV 1.0.0.7 US
+//            game = 'I', major = 1, minor = 0, majorRevision = 0, minorRevision = 7, region = 'U', steam = false;
+//            return true;
+//
+//        case 0xCF529E:  // GTA IV 1.0.0.8 US
+//            game = 'I', major = 1, minor = 0, majorRevision = 0, minorRevision = 8, region = 'U', steam = false;
+//            return true;
+//
+//        case 0xD0AF06:  // GTA EFLC 1.1.2.0 US
+//            game = 'E', major = 1, minor = 1, majorRevision = 2, minorRevision = 0, region = 'U', steam = false;
+//            return true;
+//
+//        case 0xCF4BAD:  // GTA EFLC 1.1.3.0 US
+//            game = 'E', major = 1, minor = 1, majorRevision = 3, minorRevision = 0, region = 'U', steam = false;
+//            return true;
+//
+//        default:
+//            return false;
+//    }
+//}
 
 #endif
 
