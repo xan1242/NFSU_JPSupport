@@ -191,6 +191,9 @@ void Init()
 {
     CIniReader inireader("");
 
+    // prevent registry overwriting the lang
+    injector::MakeJMP(0x40134D, 0x40139B);
+
     *(eLanguages*)0x70430C = (eLanguages)inireader.ReadInteger("MAIN", "OverrideLang", eLANGUAGE_JAPANESE);
     *(eBuildRegion*)0x734998 = (eBuildRegion)inireader.ReadInteger("MAIN", "OverrideBuildRegion", BUILD_REGION_JAPAN);
     bForceJPMovies = inireader.ReadInteger("MAIN", "ForceJPMovies", 1) != 0;
